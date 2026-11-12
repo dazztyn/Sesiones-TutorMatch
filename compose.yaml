@@ -1,4 +1,4 @@
-# Base de datos para desarrollo local. Spring Boot la levanta solo al ejecutar
+# Base de datos y Kafka para desarrollo local. Spring Boot los levanta solo al ejecutar
 # ./mvnw spring-boot:run (dependencia spring-boot-docker-compose).
 # También se puede levantar a mano: docker compose up -d
 services:
@@ -12,6 +12,13 @@ services:
       - "5432:5432"
     volumes:
       - sesiones-pgdata:/var/lib/postgresql/data
+
+  # Un solo broker en modo KRaft (sin ZooKeeper). Sin volumen: los mensajes se pierden
+  # al borrar el contenedor, que para desarrollo está bien.
+  kafka:
+    image: apache/kafka:4.1.0
+    ports:
+      - "9092:9092"
 
 volumes:
   sesiones-pgdata:

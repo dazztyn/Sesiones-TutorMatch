@@ -21,6 +21,18 @@ spring:
   flyway:
     enabled: true
 
+  grpc:
+    server:
+      port: ${GRPC_PORT:9090}
+
+  # Kafka: aquí se publican sesion.creada, sesion.finalizada y sesion.cancelada.
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      properties:
+        # Si Kafka no responde, el RPC espera esto como máximo (por defecto son 60 s).
+        max.block.ms: 5000
+
 server:
   port: ${HTTP_PORT:8080}
 

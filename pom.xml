@@ -60,8 +60,22 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Servidor gRPC (Netty, puerto 9090): la API real del servicio. Incluye reflexión,
+             así que grpcurl puede listar los RPC sin tener el .proto. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-grpc-server</artifactId>
+        </dependency>
+
+        <!-- Spring Kafka: productor de los eventos sesion.creada, sesion.finalizada y
+             sesion.cancelada que consume el servicio de Material. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-kafka</artifactId>
+        </dependency>
+
         <!-- Solo para desarrollo local: al hacer spring-boot:run levanta compose.yaml
-             (Postgres) y configura la conexión automáticamente. No se empaqueta en el jar. -->
+             (Postgres y Kafka) y configura la conexión automáticamente. No se empaqueta en el jar. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-docker-compose</artifactId>
@@ -78,6 +92,13 @@
 
     <build>
         <plugins>
+            <!-- Genera las clases Java de src/main/protobuf/sesiones.proto (copia del contrato que
+                 hoy vive en el BFF). La configuración viene del parent de Spring Boot. -->
+            <plugin>
+                <groupId>io.github.ascopes</groupId>
+                <artifactId>protobuf-maven-plugin</artifactId>
+            </plugin>
+
             <!-- Permite "./mvnw spring-boot:run" y empaqueta un jar ejecutable. -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
