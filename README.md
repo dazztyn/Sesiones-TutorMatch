@@ -27,8 +27,9 @@ curl http://localhost:8080/actuator/health
 ## API gRPC
 
 El servicio expone `tutorias.sesiones.v1.SesionesService` en el puerto `9090` (variable
-`GRPC_PORT`). El contrato está en `src/main/protobuf/sesiones.proto`; es una copia del
-que vive en el BFF, y hay que mantener las dos iguales hasta que exista el repo `contracts`.
+`GRPC_PORT`). El contrato está en `contracts/proto/sesiones/v1/sesiones.proto`, dentro del
+submódulo de contratos: al clonar hay que usar `git clone --recurse-submodules`, o ejecutar
+`git submodule update --init` si el repo ya está clonado.
 
 El servidor tiene reflexión activada, así que con [grpcurl](https://github.com/fullstorydev/grpcurl)
 se pueden listar y llamar los RPC sin el `.proto`:
