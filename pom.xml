@@ -92,11 +92,15 @@
 
     <build>
         <plugins>
-            <!-- Genera las clases Java de src/main/protobuf/sesiones.proto (copia del contrato que
-                 hoy vive en el BFF). La configuración viene del parent de Spring Boot. -->
+
             <plugin>
                 <groupId>io.github.ascopes</groupId>
                 <artifactId>protobuf-maven-plugin</artifactId>
+                <configuration>
+                    <sourceDirectories>
+                        <sourceDirectory>${project.basedir}/contracts/proto/sesiones/v1</sourceDirectory>
+                    </sourceDirectories>
+                </configuration>
             </plugin>
 
             <!-- Permite "./mvnw spring-boot:run" y empaqueta un jar ejecutable. -->
