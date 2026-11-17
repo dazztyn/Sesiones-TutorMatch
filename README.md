@@ -115,5 +115,13 @@ docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-s
 ## Tests
 
 ```bash
-./mvnw verify
+./mvnw clean verify
 ```
+
+- Necesita Docker: los tests de integración levantan Postgres 17 y Kafka reales con Testcontainers
+  (no usan `compose.yaml` ni el puerto 5432).
+- Los tests usan fechas fijas de 2030 y un Usuarios de prueba (`ContenedoresDePrueba`), así que no
+  dependen de la hora actual ni del servicio de Usuarios.
+- JaCoCo mide el coverage de líneas sin contar las clases generadas desde los `.proto`, y `verify`
+  falla si queda bajo 60%. El informe queda en `target/site/jacoco/index.html`.
+- Usa `clean`: sin él, JaCoCo suma los datos de corridas anteriores y el porcentaje puede salir inflado.
