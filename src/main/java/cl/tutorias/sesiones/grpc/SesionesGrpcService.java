@@ -29,7 +29,8 @@ public class SesionesGrpcService extends SesionesServiceGrpc.SesionesServiceImpl
             Motivo.CHOQUE_DE_HORARIO, Status.ALREADY_EXISTS,
             Motivo.TRANSICION_INVALIDA, Status.FAILED_PRECONDITION,
             Motivo.REGLA_INCUMPLIDA, Status.FAILED_PRECONDITION,
-            Motivo.SIN_PERMISO, Status.PERMISSION_DENIED);
+            Motivo.SIN_PERMISO, Status.PERMISSION_DENIED,
+            Motivo.USUARIOS_NO_DISPONIBLE, Status.UNAVAILABLE);
 
     private final SesionesService servicio;
 

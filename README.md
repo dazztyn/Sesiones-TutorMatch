@@ -46,8 +46,11 @@ grpcurl -plaintext localhost:9090 list tutorias.sesiones.v1.SesionesService
 - Una reserva (`CrearSesion`) tiene que coincidir con una casilla libre de ese tutor, ese ramo y
   ese horario exacto.
 - Antes de marcar una casilla o crear una reserva, el servicio pregunta a Usuarios si el tutor tiene
-  ese ramo activo. Mientras Usuarios no exista, lo responde un mock que siempre dice que sí
-  (`usuarios/UsuariosMock`).
+  ese ramo activo (`Usuarios.ValidarTutorRamo` por gRPC). La dirección se lee de
+  `USUARIOS_GRPC_URL` (ej. `localhost:50051` en local, `usuarios:9090` en Kubernetes). Cada llamada
+  espera como máximo 3 s; si Usuarios no responde, el RPC de Sesiones falla con `UNAVAILABLE`.
+- Sin `USUARIOS_GRPC_URL`, responde un mock que siempre dice que sí (`usuarios/UsuariosMock`), para
+  trabajar en local sin el servicio de Usuarios.
 
 ### Tarea programada
 

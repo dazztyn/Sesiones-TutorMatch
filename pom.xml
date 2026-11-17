@@ -67,6 +67,12 @@
             <artifactId>spring-boot-starter-grpc-server</artifactId>
         </dependency>
 
+        <!-- Cliente gRPC: Sesiones llama a Usuarios.ValidarTutorRamo. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-grpc-client</artifactId>
+        </dependency>
+
         <!-- Spring Kafka: productor de los eventos sesion.creada, sesion.finalizada y
              sesion.cancelada que consume el servicio de Material. -->
         <dependency>
@@ -99,6 +105,7 @@
                 <configuration>
                     <sourceDirectories>
                         <sourceDirectory>${project.basedir}/contracts/proto/sesiones/v1</sourceDirectory>
+                        <sourceDirectory>${project.basedir}/contracts/proto/usuarios/v1</sourceDirectory>
                     </sourceDirectories>
                 </configuration>
             </plugin>

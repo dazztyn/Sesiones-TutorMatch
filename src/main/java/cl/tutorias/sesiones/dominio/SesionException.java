@@ -10,7 +10,9 @@ public class SesionException extends RuntimeException {
         TRANSICION_INVALIDA,
         SIN_PERMISO,
         /** El tutor no tiene el ramo activo, no hay casilla libre, o la casilla tiene una sesión activa. */
-        REGLA_INCUMPLIDA
+        REGLA_INCUMPLIDA,
+        /** El servicio de Usuarios no respondió a tiempo. */
+        USUARIOS_NO_DISPONIBLE
     }
 
     private final Motivo motivo;
