@@ -1,5 +1,6 @@
 package cl.tutorias.sesiones.grpc;
 
+import cl.tutorias.sesiones.dominio.Casilla;
 import cl.tutorias.sesiones.dominio.SesionException;
 import cl.tutorias.sesiones.dominio.SesionException.Motivo;
 import cl.tutorias.sesiones.dominio.SesionesService;
@@ -7,7 +8,6 @@ import com.google.protobuf.Timestamp;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import java.time.Instant;
-import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
@@ -17,8 +17,8 @@ import org.springframework.stereotype.Service;
  * y los errores de negocio a códigos de estado.
  *
  * <p>Vive en el mismo paquete que las clases generadas desde el .proto, por eso aquí
- * {@code Sesion}, {@code EstadoSesion} y {@code BloqueDisponibilidad} son los mensajes gRPC
- * y las clases del dominio se nombran con su paquete completo.
+ * {@code Sesion} y {@code EstadoSesion} son los mensajes gRPC y las clases del dominio con el
+ * mismo nombre se escriben con su paquete completo.
  */
 @Service
 public class SesionesGrpcService extends SesionesServiceGrpc.SesionesServiceImplBase {
@@ -28,9 +28,8 @@ public class SesionesGrpcService extends SesionesServiceGrpc.SesionesServiceImpl
             Motivo.NO_ENCONTRADA, Status.NOT_FOUND,
             Motivo.CHOQUE_DE_HORARIO, Status.ALREADY_EXISTS,
             Motivo.TRANSICION_INVALIDA, Status.FAILED_PRECONDITION,
+            Motivo.REGLA_INCUMPLIDA, Status.FAILED_PRECONDITION,
             Motivo.SIN_PERMISO, Status.PERMISSION_DENIED);
-
-    private static final DateTimeFormatter HORA = DateTimeFormatter.ofPattern("HH:mm");
 
     private final SesionesService servicio;
 
@@ -51,8 +50,13 @@ public class SesionesGrpcService extends SesionesServiceGrpc.SesionesServiceImpl
 
     @Override
     public void listarSesiones(ListarSesionesRequest req, StreamObserver<ListarSesionesResponse> obs) {
+        // ESTADO_SESION_DESCONOCIDO (el valor por defecto) significa "todos los estados".
+        var estado = req.getEstado() == EstadoSesion.ESTADO_SESION_DESCONOCIDO ? null
+                : cl.tutorias.sesiones.dominio.EstadoSesion.valueOf(req.getEstado().name());
         responder(obs, () -> ListarSesionesResponse.newBuilder()
-                .addAllSesiones(servicio.listar(req.getTutorId(), req.getEstudianteId()).stream()
+                .addAllSesiones(servicio.listar(req.getTutorId(), req.getEstudianteId(), estado,
+                        req.hasDesde() ? aInstant(req.getDesde()) : null,
+                        req.hasHasta() ? aInstant(req.getHasta()) : null).stream()
                         .map(SesionesGrpcService::aProto).toList())
                 .build());
     }
@@ -73,11 +77,37 @@ public class SesionesGrpcService extends SesionesServiceGrpc.SesionesServiceImpl
     }
 
     @Override
+    public void marcarCasilla(MarcarCasillaRequest req, StreamObserver<BloqueDisponibilidad> obs) {
+        // Una casilla recién marcada siempre está libre.
+        responder(obs, () -> aProto(servicio.marcarCasilla(req.getTutorId(), req.getRamoCodigo(),
+                aInstant(req.getInicio())), true));
+    }
+
+    @Override
+    public void desmarcarCasilla(DesmarcarCasillaRequest req, StreamObserver<DesmarcarCasillaResponse> obs) {
+        responder(obs, () -> {
+            servicio.desmarcarCasilla(req.getId(), req.getTutorId());
+            return DesmarcarCasillaResponse.getDefaultInstance();
+        });
+    }
+
+    @Override
     public void obtenerDisponibilidad(ObtenerDisponibilidadRequest req,
             StreamObserver<ObtenerDisponibilidadResponse> obs) {
         responder(obs, () -> ObtenerDisponibilidadResponse.newBuilder()
-                .addAllBloques(servicio.disponibilidad(req.getTutorId()).stream()
-                        .map(SesionesGrpcService::aProto).toList())
+                .addAllBloques(servicio.disponibilidad(req.getTutorId(), opcional(req.hasDesde(), req.getDesde()),
+                        opcional(req.hasHasta(), req.getHasta())).stream()
+                        .map(c -> aProto(c.casilla(), c.libre())).toList())
+                .build());
+    }
+
+    @Override
+    public void buscarDisponibilidad(BuscarDisponibilidadRequest req,
+            StreamObserver<ObtenerDisponibilidadResponse> obs) {
+        responder(obs, () -> ObtenerDisponibilidadResponse.newBuilder()
+                .addAllBloques(servicio.buscarDisponibilidad(req.getRamoCodigo(),
+                        opcional(req.hasDesde(), req.getDesde()), opcional(req.hasHasta(), req.getHasta()))
+                        .stream().map(c -> aProto(c, true)).toList())
                 .build());
     }
 
@@ -89,6 +119,8 @@ public class SesionesGrpcService extends SesionesServiceGrpc.SesionesServiceImpl
             return VerificarParticipacionResponse.newBuilder()
                     .setFinalizada(sesion.getEstado() == cl.tutorias.sesiones.dominio.EstadoSesion.FINALIZADA)
                     .setParticipo(sesion.getEstudianteId().equals(req.getEstudianteId()))
+                    .setTutorId(sesion.getTutorId())
+                    .setRamoCodigo(sesion.getRamoCodigo())
                     .build();
         });
     }
@@ -125,13 +157,20 @@ public class SesionesGrpcService extends SesionesServiceGrpc.SesionesServiceImpl
                 .build();
     }
 
-    private static BloqueDisponibilidad aProto(cl.tutorias.sesiones.dominio.BloqueDisponibilidad b) {
+    private static BloqueDisponibilidad aProto(Casilla c, boolean libre) {
         return BloqueDisponibilidad.newBuilder()
-                .setTutorId(b.getTutorId())
-                .setDia(b.getDia())
-                .setHoraIni(b.getHoraIni().format(HORA))
-                .setHoraFin(b.getHoraFin().format(HORA))
+                .setId(c.getId().toString())
+                .setTutorId(c.getTutorId())
+                .setRamoCodigo(c.getRamoCodigo())
+                .setInicio(aTimestamp(c.getInicio()))
+                .setFin(aTimestamp(c.getFin()))
+                .setLibre(libre)
                 .build();
+    }
+
+    /** Un Timestamp ausente llega como null; el dominio decide si es obligatorio. */
+    private static Instant opcional(boolean presente, Timestamp t) {
+        return presente ? aInstant(t) : null;
     }
 
     private static Timestamp aTimestamp(Instant i) {

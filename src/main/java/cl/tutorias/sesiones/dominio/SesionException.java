@@ -8,7 +8,9 @@ public class SesionException extends RuntimeException {
         NO_ENCONTRADA,
         CHOQUE_DE_HORARIO,
         TRANSICION_INVALIDA,
-        SIN_PERMISO
+        SIN_PERMISO,
+        /** El tutor no tiene el ramo activo, no hay casilla libre, o la casilla tiene una sesión activa. */
+        REGLA_INCUMPLIDA
     }
 
     private final Motivo motivo;
