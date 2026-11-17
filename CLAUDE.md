@@ -27,19 +27,19 @@ Proyecto 2 del curso de Arquitectura de Sistemas. Plataforma donde estudiantes r
 |---|---|---|---|
 | Frontend | por definir | — | compañero |
 | BFF / API Gateway | NestJS (GraphQL) | — | **yo** |
-| Usuarios | Go (por confirmar) | PostgreSQL | compañero |
+| Usuarios | Go | PostgreSQL | Pablo |
 | Sesiones | Java + Spring Boot | PostgreSQL | **yo** |
-| Material y evaluaciones | .NET (por confirmar) | MongoDB | compañero |
-| MCP server + agente | TypeScript (SDK oficial MCP) | — | compañero |
+| Material y evaluaciones | NestJS | MongoDB | Ien |
+| MCP server + agente | TypeScript (SDK oficial MCP) | — | Pablo |
 
 ### Comunicación
 
 - Frontend → BFF: GraphQL.
 - BFF → Usuarios: gRPC.
 - BFF → Sesiones: gRPC.
-- BFF → Material: Kafka (comandos/eventos).
+- BFF → Material: gRPC.
 - BFF → MCP server: REST (`POST /agent/chat`).
-- Sesiones → Usuarios: gRPC (validar que el tutor existe y aprobó el ramo).
+- Sesiones → Usuarios: gRPC (`ValidarTutorRamo`: que el tutor existe y tiene el ramo activo).
 - Sesiones → Material: Kafka (`sesion.creada`, `sesion.finalizada`, `sesion.cancelada`).
 - Material → Sesiones: gRPC (verificar que la sesión finalizó y que el estudiante participó antes de aceptar una evaluación).
 
@@ -53,7 +53,7 @@ Lo que afecta a Sesiones. La versión completa, con el flujo del front, está en
 
 - **Un usuario puede ser alumno y tutor a la vez** (como en las ayudantías). Es tutor de un ramo cuando lo declaró aprobado. El JWT no lleva rol: el permiso por ramo lo valida Sesiones con `Usuarios.ValidarTutorRamo`, al crear una sesión y al marcar disponibilidad.
 - **Disponibilidad semana a semana, por ramo:** el tutor marca casillas con fecha concreta para cada ramo. Una casilla no puede solaparse con otra del mismo tutor, sea del ramo que sea (`EXCLUDE` sobre `tutor_id` y el rango, como en `sesiones`).
-- **Casillas = bloques de clase de la universidad** (acordado el 2026-11-16): 90 minutos, de lunes a viernes, con inicio fijo en hora de Chile a las 08:10, 09:55, 11:40, 14:30, 16:15 y 18:00 (entre el tercero y el cuarto está el almuerzo). Una sesión ocupa exactamente una casilla. Sesiones valida el bloque con la zona `America/Santiago` (`dominio/Bloques`). Detalle completo en `propuestas/sesiones.md` del repo de contratos.
+- **Casillas = bloques de clase de la universidad** (acordado el 2026-11-16): 90 minutos, solo de lunes a viernes (no hay tutorías los fines de semana, confirmado el 2026-11-17), con inicio fijo en hora de Chile a las 08:10, 09:55, 11:40, 14:30, 16:15 y 18:00 (entre el tercero y el cuarto está el almuerzo). Una sesión ocupa exactamente una casilla. Sesiones valida el bloque con la zona `America/Santiago` (`dominio/Bloques`). Detalle completo en `propuestas/sesiones.md` del repo de contratos.
 - **Solo el tutor confirma o finaliza una sesión;** el alumno solo puede cancelarla.
 - **Reservar:** solo se puede tomar una casilla disponible de ese tutor y ese ramo; `CrearSesion` lo valida. Nadie puede reservarse a sí mismo, y un usuario no puede tener dos sesiones que se crucen, aunque en una sea alumno y en la otra tutor.
 - **Confirmación:** la reserva queda `PENDIENTE` hasta que el tutor la confirme; rechazar es cancelar. Mientras está pendiente el horario queda bloqueado (el `EXCLUDE` actual de `sesiones` ya lo cubre).
@@ -82,9 +82,9 @@ Lo que afecta a Sesiones. La versión completa, con el flujo del front, está en
 ## Contratos
 
 - Viven en el repo `Contratos-TutorMatch`, incluido aquí como submódulo de git en `contracts/`. Clonar con `--recurse-submodules`; en GitHub Actions el checkout necesita `submodules: true`.
+- Los contratos de Sesiones, Usuarios y Material están acordados (submódulo en `2fa0949`, "contratos acordados de Sesiones, Usuarios y Material"). El submódulo no se edita desde aquí: un cambio va por PR al repo de contratos y luego `git submodule update --remote contracts`.
 - `contracts/proto/sesiones/v1/sesiones.proto`: lo implementa este servicio y lo consumen el BFF, Material y el agente. El build genera las clases Java desde ahí.
-  - **Temporal:** en la rama `feat/casillas-disponibilidad`, ese archivo está editado a mano dentro del submódulo con el contrato de `propuestas/sesiones.md` (casillas, `MarcarCasilla`, `DesmarcarCasilla`, `BuscarDisponibilidad`, filtros de `ListarSesiones` y campos nuevos de `VerificarParticipacion`). No se commitea dentro del submódulo: cuando el PR de contratos se mergee, se descarta el cambio local (`git -C contracts restore .`) y se actualiza el submódulo (`git submodule update --remote contracts`).
-- `usuarios.proto` (propuesta en `propuestas/usuarios.md`, lo implementa Usuarios): Sesiones consumirá `ValidarTutorRamo`. Mientras no esté en `contracts/proto`, se usa `usuarios/UsuariosMock`.
+- `contracts/proto/usuarios/v1/usuarios.proto` (lo implementa Usuarios): Sesiones consume `ValidarTutorRamo`, cuyas clases Java quedan en `cl.tutorias.usuarios.grpc`. Mientras no exista el adaptador gRPC, se usa `usuarios/UsuariosMock`.
 - `contracts/eventos/sesion.*.json`: ejemplos de los eventos que publica Sesiones y consume Material. JSON con `eventId`, `type`, `occurredAt` (ISO-8601 UTC) y `payload`; un tópico por `type` y la clave del mensaje es el `sesionId`.
 - Ids de usuario y de sesión: UUID en texto. Códigos de ramo: los del catálogo de `Usuarios.ListarRamos` (ej. `MAT1610`).
 - Direcciones gRPC en Kubernetes: `<servicio>:9090`, leídas de variables como `USUARIOS_GRPC_URL`.
@@ -115,18 +115,15 @@ Mientras estemos en la etapa 1, no escribas tests ni configures el pipeline salv
 
 ## Próximos pasos
 
-Estado de este repo al 2026-11-12, revisado contra el repo de contratos (commit `9a670f7`). El plan del BFF está en su propio `CLAUDE.md`.
+Estado de este repo al 2026-11-17, revisado contra el repo de contratos (commit `2fa0949`). El plan del BFF está en su propio `CLAUDE.md`.
 
 1. ✅ Contratos: el `sesiones.proto` del submódulo es el que ya implementa el servicio (al moverlo solo cambió un comentario) y los eventos de `contracts/eventos/` coinciden con lo que publica `SesionesKafkaPublisher`. El traslado no deja cambios de código pendientes.
 2. ✅ Servicio funcional: Flyway, JPA, los 8 RPC y el productor Kafka, probados a mano.
-3. ✅ Decisiones del flujo implementadas según `propuestas/sesiones.md` (2026-11-16, rama `feat/casillas-disponibilidad`) y probadas a mano de punta a punta: migración V3, `MarcarCasilla`, `DesmarcarCasilla`, `ObtenerDisponibilidad` por rango con `libre`, `BuscarDisponibilidad`, filtros de `ListarSesiones`, validaciones de `CrearSesion` (casilla libre exacta, no reservarse a sí mismo, cruce entre papeles), solo el tutor confirma, `VerificarParticipacion` con `tutor_id` y `ramo_codigo`, y la tarea programada de vencimiento.
-4. Pendiente:
-   1. Cuando se mergee el PR de `propuestas/sesiones.md`, descartar el cambio local del submódulo y actualizarlo (ver "Contratos").
-   2. Adaptador gRPC a `Usuarios.ValidarTutorRamo` cuando `usuarios.proto` esté en `contracts/proto`: agregar `contracts/proto/usuarios/v1` a los `sourceDirectories` del plugin de protobuf, el starter del cliente gRPC y la dirección en `USUARIOS_GRPC_URL`; usar `UsuariosMock` solo sin esa variable; si Usuarios no responde, `UNAVAILABLE`. Hoy el mock acepta cualquier tutor y ramo.
-   3. Confirmar que no hay tutorías los sábados (`Bloques` solo acepta lunes a viernes).
+3. ✅ Decisiones del flujo implementadas según `propuestas/sesiones.md` (2026-11-16, rama `feat/casillas-disponibilidad`) y probadas a mano de punta a punta: migración V3, `MarcarCasilla`, `DesmarcarCasilla`, `ObtenerDisponibilidad` por rango con `libre`, `BuscarDisponibilidad`, filtros de `ListarSesiones`, validaciones de `CrearSesion` (casilla libre exacta, no reservarse a sí mismo, cruce entre papeles), solo el tutor confirma o finaliza, `VerificarParticipacion` con `tutor_id` y `ramo_codigo`, y la tarea programada de vencimiento. Mergeado en `main` (PR 5); el submódulo ya apunta a los contratos acordados.
+4. Siguiente: adaptador gRPC a `Usuarios.ValidarTutorRamo`, ya desbloqueado porque `usuarios.proto` está en `contracts/proto`. Agregar `contracts/proto/usuarios/v1` a los `sourceDirectories` del plugin de protobuf, el starter del cliente gRPC y la dirección en `USUARIOS_GRPC_URL`; usar `UsuariosMock` solo sin esa variable; si Usuarios no responde, `UNAVAILABLE`. Hoy el mock acepta cualquier tutor y ramo.
 5. Ya decidido por el contrato, no hacer nada:
    - No hace falta una tabla outbox: el contrato acepta que un evento se pierda y Material confirma con `VerificarParticipacion` antes de aceptar una evaluación.
    - Los ids son UUID en texto: las columnas `TEXT` de `tutor_id` y `estudiante_id` sirven tal cual.
-6. Tests hasta coverage ≥ 60%.
-7. Dockerfile y pipeline: el build necesita la carpeta `contracts/` (checkout con `submodules: true` y copiarla a la imagen donde se compila).
+6. Después (etapa 2): tests hasta coverage ≥ 60%.
+7. Después (etapa 3), Dockerfile y pipeline: el build necesita la carpeta `contracts/` (checkout con `submodules: true` y copiarla a la imagen donde se compila).
 8. Kubernetes: Service `sesiones` con gRPC en el puerto 9090, y las variables `USUARIOS_GRPC_URL` y `KAFKA_BOOTSTRAP_SERVERS`.
