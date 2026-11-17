@@ -1,4 +1,4 @@
-# SesionesArq2
+# Sesiones-TutorMatch
 
 Servicio de **Sesiones** de la plataforma de tutorías (Java 21 + Spring Boot 4).
 Maneja la agenda, la disponibilidad de tutores y el ciclo de vida de las sesiones.
@@ -38,6 +38,38 @@ se pueden listar y llamar los RPC sin el `.proto`:
 grpcurl -plaintext localhost:9090 list tutorias.sesiones.v1.SesionesService
 ```
 
+### Disponibilidad y reservas
+
+- El tutor marca **casillas**: bloques de clase de 90 minutos, de lunes a viernes, que empiezan a
+  las 08:10, 09:55, 11:40, 14:30, 16:15 o 18:00, hora de Chile (`America/Santiago`). Los
+  `Timestamp` viajan en UTC; el servicio convierte solo para validar.
+- Una reserva (`CrearSesion`) tiene que coincidir con una casilla libre de ese tutor, ese ramo y
+  ese horario exacto.
+- Antes de marcar una casilla o crear una reserva, el servicio pregunta a Usuarios si el tutor tiene
+  ese ramo activo. Mientras Usuarios no exista, lo responde un mock que siempre dice que sí
+  (`usuarios/UsuariosMock`).
+
+### Tarea programada
+
+Cada 5 minutos el servicio finaliza las sesiones confirmadas que ya terminaron y cancela las
+pendientes cuyo inicio pasó sin confirmación, publicando sus eventos. Para probarlo en local se
+puede acortar el intervalo:
+
+```bash
+./mvnw spring-boot:run -Dspring-boot.run.arguments=--sesiones.vencimiento.intervalo=PT10S
+```
+
+### Puerto 5432 ocupado
+
+Si otro proyecto ya usa el puerto 5432, `spring-boot:run` falla al levantar `compose.yaml`. Se
+puede levantar Postgres en otro puerto con el mismo volumen y apagar la integración con compose:
+
+```bash
+docker compose up -d kafka
+docker run -d --name sesiones-pg -p 55432:5432 -e POSTGRES_DB=sesiones -e POSTGRES_USER=sesiones -e POSTGRES_PASSWORD=sesiones -v sesionesarq2_sesiones-pgdata:/var/lib/postgresql/data postgres:17-alpine
+DB_URL=jdbc:postgresql://localhost:55432/sesiones ./mvnw spring-boot:run -Dspring-boot.run.arguments=--spring.docker.compose.enabled=false
+```
+
 ## Eventos Kafka
 
 El servicio publica un evento cuando una sesión se crea, se finaliza o se cancela
@@ -47,8 +79,8 @@ El servicio publica un evento cuando una sesión se crea, se finaliza o se cance
 | Tópico y `type`     | Cuándo                         |
 |---------------------|--------------------------------|
 | `sesion.creada`     | `CrearSesion` guardó la sesión |
-| `sesion.finalizada` | `FinalizarSesion`              |
-| `sesion.cancelada`  | `CancelarSesion`               |
+| `sesion.finalizada` | `FinalizarSesion`, o la tarea programada al terminar una sesión confirmada |
+| `sesion.cancelada`  | `CancelarSesion`, o la tarea programada al vencer una sesión pendiente |
 
 La clave del mensaje es el id de la sesión y el valor es JSON:
 

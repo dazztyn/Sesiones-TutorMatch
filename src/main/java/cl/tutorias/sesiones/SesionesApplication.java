@@ -2,6 +2,7 @@ package cl.tutorias.sesiones;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Punto de entrada del servicio de Sesiones.
@@ -14,8 +15,12 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  *   <li>autoconfiguración: según las dependencias del pom, Spring crea por su cuenta
  *       el DataSource, Hibernate, Flyway, Tomcat...</li>
  * </ul>
+ *
+ * <p>{@code @EnableScheduling} activa las tareas programadas ({@code @Scheduled}), como el
+ * vencimiento de sesiones.
  */
 @SpringBootApplication
+@EnableScheduling
 public class SesionesApplication {
 
     public static void main(String[] args) {
