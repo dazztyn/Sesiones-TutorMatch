@@ -54,7 +54,7 @@ Lo que afecta a Sesiones. La versión completa, con el flujo del front, está en
 - **Un usuario puede ser alumno y tutor a la vez** (como en las ayudantías). Es tutor de un ramo cuando lo declaró aprobado. El JWT no lleva rol: el permiso por ramo lo valida Sesiones con `Usuarios.ValidarTutorRamo`, al crear una sesión y al marcar disponibilidad.
 - **Disponibilidad semana a semana, por ramo:** el tutor marca casillas con fecha concreta para cada ramo. Una casilla no puede solaparse con otra del mismo tutor, sea del ramo que sea (`EXCLUDE` sobre `tutor_id` y el rango, como en `sesiones`).
 - **Casillas = bloques de clase de la universidad** (acordado el 2026-11-16): 90 minutos, de lunes a viernes, con inicio fijo en hora de Chile a las 08:10, 09:55, 11:40, 14:30, 16:15 y 18:00 (entre el tercero y el cuarto está el almuerzo). Una sesión ocupa exactamente una casilla. Sesiones valida el bloque con la zona `America/Santiago` (`dominio/Bloques`). Detalle completo en `propuestas/sesiones.md` del repo de contratos.
-- **Solo el tutor confirma una sesión.**
+- **Solo el tutor confirma o finaliza una sesión;** el alumno solo puede cancelarla.
 - **Reservar:** solo se puede tomar una casilla disponible de ese tutor y ese ramo; `CrearSesion` lo valida. Nadie puede reservarse a sí mismo, y un usuario no puede tener dos sesiones que se crucen, aunque en una sea alumno y en la otra tutor.
 - **Confirmación:** la reserva queda `PENDIENTE` hasta que el tutor la confirme; rechazar es cancelar. Mientras está pendiente el horario queda bloqueado (el `EXCLUDE` actual de `sesiones` ya lo cubre).
 - **Desmarcar:** una casilla con una sesión `PENDIENTE` o `CONFIRMADA` no se puede desmarcar (`FAILED_PRECONDITION`); primero se cancela la sesión.
