@@ -95,8 +95,9 @@ public class SesionesService {
         if (!sesion.participa(usuarioId)) {
             throw new SesionException(Motivo.SIN_PERMISO, "El usuario no participa en la sesión");
         }
-        if (destino == EstadoSesion.CONFIRMADA && !sesion.getTutorId().equals(usuarioId)) {
-            throw new SesionException(Motivo.SIN_PERMISO, "Solo el tutor puede confirmar la sesión");
+        // Si el alumno pudiera finalizar, podría evaluar una sesión que todavía no ocurre.
+        if (destino != EstadoSesion.CANCELADA && !sesion.getTutorId().equals(usuarioId)) {
+            throw new SesionException(Motivo.SIN_PERMISO, "Solo el tutor puede confirmar o finalizar la sesión");
         }
         if (!sesion.getEstado().puedePasarA(destino)) {
             throw new SesionException(Motivo.TRANSICION_INVALIDA,
