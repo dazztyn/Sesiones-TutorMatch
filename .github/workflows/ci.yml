@@ -1,0 +1,36 @@
+# CI del servicio de Sesiones: tests con coverage mínimo de 60% y build de la imagen Docker.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # El build genera las clases gRPC desde el submódulo contracts/.
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # Corre los tests (Testcontainers usa el Docker del runner) y falla si JaCoCo mide menos de 60%.
+      - name: Tests y coverage
+        run: ./mvnw -B clean verify
+
+      - name: Informe de coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco
+          path: target/site/jacoco/
+
+      # Solo comprueba que la imagen se construye; todavía no se publica en ningún registro.
+      - name: Imagen Docker
+        run: docker build -t sesiones:${{ github.sha }} .

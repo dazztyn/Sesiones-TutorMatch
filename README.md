@@ -125,3 +125,34 @@ docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-s
 - JaCoCo mide el coverage de líneas sin contar las clases generadas desde los `.proto`, y `verify`
   falla si queda bajo 60%. El informe queda en `target/site/jacoco/index.html`.
 - Usa `clean`: sin él, JaCoCo suma los datos de corridas anteriores y el porcentaje puede salir inflado.
+
+## Imagen Docker
+
+Se construye desde la raíz del repo, con el submódulo `contracts/` descargado:
+
+```bash
+docker build -t sesiones .
+```
+
+La imagen corre como usuario sin privilegios y expone `9090` (gRPC) y `8080` (Actuator). No trae
+credenciales propias: todo llega por variables de entorno.
+
+| Variable | Para qué | Por defecto |
+|---|---|---|
+| `DB_URL` | JDBC de PostgreSQL | `jdbc:postgresql://localhost:5432/sesiones` |
+| `DB_USER`, `DB_PASSWORD` | Credenciales de PostgreSQL | `sesiones` (solo para desarrollo) |
+| `KAFKA_BOOTSTRAP_SERVERS` | Broker de Kafka | `localhost:9092` |
+| `USUARIOS_GRPC_URL` | Servicio de Usuarios (ej. `usuarios:9090`) | sin definir: usa el mock |
+| `GRPC_PORT`, `HTTP_PORT` | Puertos del servicio | `9090`, `8080` |
+
+Ejemplo contra el Postgres local en el puerto 55432 (ver "Puerto 5432 ocupado"):
+
+```bash
+docker run --rm -p 9090:9090 -p 8080:8080 -e DB_URL=jdbc:postgresql://host.docker.internal:55432/sesiones sesiones
+```
+
+## CI
+
+`.github/workflows/ci.yml` corre en cada push y pull request: descarga el submódulo, ejecuta
+`./mvnw clean verify` (falla si el coverage queda bajo 60%), sube el informe de JaCoCo como artefacto
+y construye la imagen Docker, sin publicarla.

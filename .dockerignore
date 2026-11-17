@@ -1,0 +1,8 @@
+# Solo se envía al build lo que el Dockerfile copia.
+target/
+.git
+contracts/.git
+.idea/
+.vscode/
+*.iml
+.env

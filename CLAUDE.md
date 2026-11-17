@@ -4,7 +4,7 @@
 
 Este repo es el **servicio de Sesiones (Java + Spring Boot)**. Aquí solo va código de Sesiones; el resto de la arquitectura es contexto.
 
-- Tests: `./mvnw verify` (coverage ≥ 60% con JaCoCo)
+- Tests: `./mvnw clean verify` (necesita Docker; coverage ≥ 60% con JaCoCo; sin `clean`, JaCoCo suma corridas anteriores)
 - Levantar en local: `./mvnw spring-boot:run`
 
 Proyecto 2 del curso de Arquitectura de Sistemas. Plataforma donde estudiantes reservan tutorías con otros estudiantes (tutores) que aprobaron el ramo. Arquitectura de microservicios en Kubernetes.
@@ -124,6 +124,6 @@ Estado de este repo al 2026-11-17, revisado contra el repo de contratos (commit 
 5. Ya decidido por el contrato, no hacer nada:
    - No hace falta una tabla outbox: el contrato acepta que un evento se pierda y Material confirma con `VerificarParticipacion` antes de aceptar una evaluación.
    - Los ids son UUID en texto: las columnas `TEXT` de `tutor_id` y `estudiante_id` sirven tal cual.
-6. Siguiente (etapa 2): tests hasta coverage ≥ 60%.
-7. Después (etapa 3), Dockerfile y pipeline: el build necesita la carpeta `contracts/` (checkout con `submodules: true` y copiarla a la imagen donde se compila).
-8. Kubernetes: Service `sesiones` con gRPC en el puerto 9090, y las variables `USUARIOS_GRPC_URL` y `KAFKA_BOOTSTRAP_SERVERS`.
+6. ✅ Tests (etapa 2, 2026-11-17): unitarios de `Bloques` y `EstadoSesion`, e integración con Testcontainers (Postgres 17 y Kafka reales) para `SesionesService`, el adaptador gRPC y la publicación de eventos después del commit. JaCoCo excluye las clases generadas desde los `.proto` y hace fallar `verify` bajo 60% de líneas (hoy 93,9%). `UsuariosGrpc` no tiene test automático.
+7. ✅ Dockerfile y CI (etapa 3, 2026-11-17): imagen multietapa (JDK 21 para compilar con `contracts/proto`, JRE 21 Alpine con usuario sin privilegios, puertos 9090 y 8080) probada en local; `.github/workflows/ci.yml` corre `./mvnw clean verify` con el submódulo y construye la imagen sin publicarla. Falta ver la primera ejecución en GitHub.
+8. Siguiente (etapa 4), Kubernetes: Service `sesiones` con gRPC en el puerto 9090 y Actuator en 8080 para las probes; variables `DB_URL`, `DB_USER`, `DB_PASSWORD` (desde un Secret: el valor por defecto `sesiones` es solo para desarrollo), `KAFKA_BOOTSTRAP_SERVERS` y `USUARIOS_GRPC_URL`. Antes hay que decidir dónde se publica la imagen.
