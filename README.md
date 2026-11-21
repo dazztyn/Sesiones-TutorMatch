@@ -73,6 +73,19 @@ docker run -d --name sesiones-pg -p 55432:5432 -e POSTGRES_DB=sesiones -e POSTGR
 DB_URL=jdbc:postgresql://localhost:55432/sesiones ./mvnw spring-boot:run -Dspring-boot.run.arguments=--spring.docker.compose.enabled=false
 ```
 
+### Probar contra Usuarios real
+
+El servicio de Usuarios ([pablofgx-code/tutormatch-usuarios](https://github.com/pablofgx-code/tutormatch-usuarios))
+se levanta con su propio Dockerfile; en local su gRPC escucha en el puerto `50051` (variable `PORT`).
+Con Usuarios arriba, basta con apuntar Sesiones hacia él (aquí con el Postgres del puerto 55432):
+
+```bash
+USUARIOS_GRPC_URL=localhost:50051 DB_URL=jdbc:postgresql://localhost:55432/sesiones ./mvnw spring-boot:run -Dspring-boot.run.arguments=--spring.docker.compose.enabled=false
+```
+
+Si Usuarios usa su propio Postgres, tiene que ir en otro puerto (por ejemplo 55433) para no chocar
+con el de Sesiones. En Kubernetes la dirección acordada es `usuarios:9090`.
+
 ## Eventos Kafka
 
 El servicio publica un evento cuando una sesión se crea, se finaliza o se cancela
