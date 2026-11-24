@@ -70,7 +70,7 @@ Lo que afecta a Sesiones. La versión completa, con el flujo del front, está en
 - Responsable de agenda, disponibilidad de tutores y ciclo de vida de una sesión: `PENDIENTE → CONFIRMADA → FINALIZADA` o `CANCELADA`.
 - PostgreSQL con migraciones Flyway. Los choques de horario de un tutor se impiden en la base de datos con un `EXCLUDE USING gist (tutor_id WITH =, horario WITH &&)` sobre un `TSTZRANGE` (requiere `btree_gist`), aplicado solo a sesiones `PENDIENTE` o `CONFIRMADA`.
 - Tablas: `sesiones` (id, tutor_id, estudiante_id, ramo_codigo, inicio, fin, horario generado, estado, creada_en) y `disponibilidad` (casillas: id, tutor_id, ramo_codigo, inicio, fin, horario generado). La V3 agregó el `EXCLUDE` de casillas, un `CHECK` de 90 minutos, `sesiones_no_a_si_mismo` y `sesiones_estudiante_sin_choque`.
-- Código: `dominio/` (entidades, repositorios, `SesionesService` con todas las reglas, `Bloques`, puerto `ValidadorTutorRamo`), `grpc/` (adaptador del servidor), `kafka/` (publicador de eventos), `usuarios/` (`UsuariosGrpc`, adaptador gRPC de `ValidadorTutorRamo`, y `UsuariosMock`, que se usa solo sin `USUARIOS_GRPC_URL`) y `tareas/` (vencimiento programado, intervalo en `sesiones.vencimiento.intervalo`, por defecto `PT5M`).
+- Código: `dominio/` (entidades, repositorios, `SesionesService` con todas las reglas, `Bloques`, puerto `ValidadorTutorRamo`), `grpc/` (adaptador del servidor), `kafka/` (publicador de eventos y `TopicosKafka`, que crea los tres tópicos al arrancar), `usuarios/` (`UsuariosGrpc`, adaptador gRPC de `ValidadorTutorRamo`, y `UsuariosMock`, que se usa solo sin `USUARIOS_GRPC_URL`) y `tareas/` (vencimiento programado, intervalo en `sesiones.vencimiento.intervalo`, por defecto `PT5M`).
 - Stack: Spring Data JPA, servidor y cliente gRPC, Spring Kafka, tests con JUnit + Testcontainers (Postgres y Kafka reales).
 
 ## BFF (NestJS)
@@ -85,7 +85,7 @@ Lo que afecta a Sesiones. La versión completa, con el flujo del front, está en
 - Los contratos de Sesiones, Usuarios y Material están acordados (submódulo en `2fa0949`, "contratos acordados de Sesiones, Usuarios y Material"). El submódulo no se edita desde aquí: un cambio va por PR al repo de contratos y luego `git submodule update --remote contracts`.
 - `contracts/proto/sesiones/v1/sesiones.proto`: lo implementa este servicio y lo consumen el BFF, Material y el agente. El build genera las clases Java desde ahí.
 - `contracts/proto/usuarios/v1/usuarios.proto` (lo implementa Usuarios): Sesiones consume `ValidarTutorRamo` con `usuarios/UsuariosGrpc`; las clases Java generadas quedan en `cl.tutorias.usuarios.grpc`.
-- `contracts/eventos/sesion.*.json`: ejemplos de los eventos que publica Sesiones y consume Material. JSON con `eventId`, `type`, `occurredAt` (ISO-8601 UTC) y `payload`; un tópico por `type` y la clave del mensaje es el `sesionId`.
+- `contracts/eventos/sesion.*.json`: ejemplos de los eventos que publica Sesiones y consume Material. JSON con `eventId`, `type`, `occurredAt` (ISO-8601 UTC) y `payload`; un tópico por `type` y la clave del mensaje es el `sesionId`. Los tópicos los crea Sesiones al arrancar (una partición, réplica 1): Material se suscribe sin crearlos y el broker puede tener la autocreación desactivada.
 - Ids de usuario y de sesión: UUID en texto. Códigos de ramo: los del catálogo de `Usuarios.ListarRamos` (ej. `MAT1610`).
 - Direcciones gRPC en Kubernetes: `<servicio>:9090`, leídas de variables como `USUARIOS_GRPC_URL`.
 - Cambiar un contrato: PR en el repo de contratos y avisar a quienes lo consumen. Agregar campos con números nuevos es seguro; nunca reutilizar ni cambiar un número; renombrar un RPC o cambiar un tipo exige crear `v2`.
@@ -115,7 +115,7 @@ Mientras estemos en la etapa 1, no escribas tests ni configures el pipeline salv
 
 ## Próximos pasos
 
-Estado de este repo al 2026-11-21, revisado contra el repo de contratos (commit `2fa0949`). El plan del BFF está en su propio `CLAUDE.md`.
+Estado de este repo al 2026-11-23, revisado contra el repo de contratos (commit `2fa0949`). El plan del BFF está en su propio `CLAUDE.md`.
 
 1. ✅ Contratos: el `sesiones.proto` del submódulo es el que ya implementa el servicio (al moverlo solo cambió un comentario) y los eventos de `contracts/eventos/` coinciden con lo que publica `SesionesKafkaPublisher`. El traslado no deja cambios de código pendientes.
 2. ✅ Servicio funcional: Flyway, JPA, los 8 RPC y el productor Kafka, probados a mano.
@@ -128,4 +128,5 @@ Estado de este repo al 2026-11-21, revisado contra el repo de contratos (commit 
    - Los ids son UUID en texto: las columnas `TEXT` de `tutor_id` y `estudiante_id` sirven tal cual.
 6. ✅ Tests (etapa 2, 2026-11-17): unitarios de `Bloques` y `EstadoSesion`, e integración con Testcontainers (Postgres 17 y Kafka reales) para `SesionesService`, el adaptador gRPC y la publicación de eventos después del commit. JaCoCo excluye las clases generadas desde los `.proto` y hace fallar `verify` bajo 60% de líneas (hoy 93,9%). `UsuariosGrpc` no tiene test automático.
 7. ✅ Dockerfile y CI (etapa 3, 2026-11-17): imagen multietapa (JDK 21 para compilar con `contracts/proto`, JRE 21 Alpine con usuario sin privilegios, puertos 9090 y 8080) probada en local; `.github/workflows/ci.yml` corre `./mvnw clean verify` con el submódulo y construye la imagen sin publicarla. La primera ejecución en GitHub pasó (2026-11-19).
+   - ✅ Tópicos de Kafka (2026-11-23, rama `feat/topicos-kafka`): `kafka/TopicosKafka` crea `sesion.creada`, `sesion.finalizada` y `sesion.cancelada` al arrancar, porque Material (`IenZAVALA-S/tutormatch-material`) se suscribe con `allowAutoTopicCreation: false`. Los tests corren contra un Kafka sin autocreación de tópicos.
 8. Siguiente (etapa 4), Kubernetes: Service `sesiones` con gRPC en el puerto 9090 y Actuator en 8080 para las probes; variables `DB_URL`, `DB_USER`, `DB_PASSWORD` (desde un Secret: el valor por defecto `sesiones` es solo para desarrollo), `KAFKA_BOOTSTRAP_SERVERS` y `USUARIOS_GRPC_URL=usuarios:9090` (requiere que Usuarios escuche en el 9090, ver punto 4). Antes hay que decidir dónde se publica la imagen.

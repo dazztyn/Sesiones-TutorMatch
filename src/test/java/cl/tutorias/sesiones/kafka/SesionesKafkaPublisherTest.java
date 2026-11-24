@@ -14,6 +14,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -44,6 +47,17 @@ class SesionesKafkaPublisherTest extends PruebaDeIntegracion {
 
     @Autowired
     private JsonMapper json;
+
+    @Test
+    void losTresTopicosExistenAlArrancarConUnaParticion() throws Exception {
+        try (Admin admin = Admin.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()))) {
+            Map<String, TopicDescription> topicos = admin
+                    .describeTopics(List.of("sesion.creada", "sesion.finalizada", "sesion.cancelada"))
+                    .allTopicNames().get();
+            assertEquals(3, topicos.size());
+            topicos.values().forEach(t -> assertEquals(1, t.partitions().size(), t.name()));
+        }
+    }
 
     @Test
     void publicaDespuesDelCommitYNadaSiHayRollback() {

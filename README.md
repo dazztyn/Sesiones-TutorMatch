@@ -92,6 +92,10 @@ El servicio publica un evento cuando una sesión se crea, se finaliza o se cance
 (confirmarla no publica nada). El broker se configura con `KAFKA_BOOTSTRAP_SERVERS`
 (por defecto `localhost:9092`).
 
+Sesiones crea los tres tópicos al arrancar (`kafka/TopicosKafka`), con una partición para conservar
+el orden y réplica 1. Material se suscribe sin crearlos, y el broker puede tener la autocreación
+desactivada. Si un tópico ya existe, se deja como está.
+
 | Tópico y `type`     | Cuándo                         |
 |---------------------|--------------------------------|
 | `sesion.creada`     | `CrearSesion` guardó la sesión |

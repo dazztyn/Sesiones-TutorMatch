@@ -32,7 +32,9 @@ public class ContenedoresDePrueba {
     @Bean
     @ServiceConnection
     KafkaContainer kafka() {
-        return new KafkaContainer("apache/kafka:4.1.0");
+        // Sin autocreación, como puede estar el broker del clúster: si Sesiones no creara sus tópicos
+        // al arrancar, los tests que publican eventos fallarían.
+        return new KafkaContainer("apache/kafka:4.1.0").withEnv("KAFKA_AUTO_CREATE_TOPICS_ENABLE", "false");
     }
 
     @Bean

@@ -19,8 +19,11 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 public class SesionesKafkaPublisher {
 
-    /** Tópico según el estado al que llegó la sesión. Confirmar no publica nada. */
-    private static final Map<EstadoSesion, String> TOPICOS = Map.of(
+    /**
+     * Tópico según el estado al que llegó la sesión. Confirmar no publica nada. {@link TopicosKafka}
+     * crea estos mismos tópicos al arrancar.
+     */
+    static final Map<EstadoSesion, String> TOPICOS = Map.of(
             EstadoSesion.PENDIENTE, "sesion.creada",
             EstadoSesion.FINALIZADA, "sesion.finalizada",
             EstadoSesion.CANCELADA, "sesion.cancelada");
