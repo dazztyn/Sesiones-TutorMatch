@@ -115,7 +115,7 @@ Mientras estemos en la etapa 1, no escribas tests ni configures el pipeline salv
 
 ## Próximos pasos
 
-Estado de este repo al 2026-11-23, revisado contra el repo de contratos (commit `2fa0949`). El plan del BFF está en su propio `CLAUDE.md`.
+Estado de este repo al 2026-11-24, revisado contra el repo de contratos (commit `2fa0949`). El plan del BFF está en su propio `CLAUDE.md`.
 
 1. ✅ Contratos: el `sesiones.proto` del submódulo es el que ya implementa el servicio (al moverlo solo cambió un comentario) y los eventos de `contracts/eventos/` coinciden con lo que publica `SesionesKafkaPublisher`. El traslado no deja cambios de código pendientes.
 2. ✅ Servicio funcional: Flyway, JPA, los 8 RPC y el productor Kafka, probados a mano.
@@ -129,4 +129,10 @@ Estado de este repo al 2026-11-23, revisado contra el repo de contratos (commit 
 6. ✅ Tests (etapa 2, 2026-11-17): unitarios de `Bloques` y `EstadoSesion`, e integración con Testcontainers (Postgres 17 y Kafka reales) para `SesionesService`, el adaptador gRPC y la publicación de eventos después del commit. JaCoCo excluye las clases generadas desde los `.proto` y hace fallar `verify` bajo 60% de líneas (hoy 93,9%). `UsuariosGrpc` no tiene test automático.
 7. ✅ Dockerfile y CI (etapa 3, 2026-11-17): imagen multietapa (JDK 21 para compilar con `contracts/proto`, JRE 21 Alpine con usuario sin privilegios, puertos 9090 y 8080) probada en local; `.github/workflows/ci.yml` corre `./mvnw clean verify` con el submódulo y construye la imagen sin publicarla. La primera ejecución en GitHub pasó (2026-11-19).
    - ✅ Tópicos de Kafka (2026-11-23, rama `feat/topicos-kafka`): `kafka/TopicosKafka` crea `sesion.creada`, `sesion.finalizada` y `sesion.cancelada` al arrancar, porque Material (`IenZAVALA-S/tutormatch-material`) se suscribe con `allowAutoTopicCreation: false`. Los tests corren contra un Kafka sin autocreación de tópicos.
+   - ✅ Probado contra el servicio real de Material el 2026-11-24 (repo `IenZAVALA-S/tutormatch-material`, `main` en `a61d82d`), con todo real salvo el agente (GraphiQL → BFF → servicios). Material corrió con gRPC en el 9095 y `KAFKA_BROKERS=localhost:9092`; Sesiones, con `DB_URL` en el 55432 y `USUARIOS_GRPC_URL=localhost:50051`. Resultados:
+     - Los `sesion.creada` llegaron a Material (su consumidor, grupo `material`, lee desde el inicio e importó las sesiones existentes): un alumno con sesión con la tutora ve su material y otro sin sesiones no.
+     - La tarea programada pasó a `FINALIZADA` una sesión confirmada y publicó `sesion.finalizada`.
+     - `Material.Evaluar` llamó a `VerificarParticipacion` (con `tutor_id` y `ramo_codigo`) y aceptó la evaluación; repetirla dio `CONFLICT`.
+     - Queda probado el ida y vuelta con los dos protocolos del curso: Sesiones → Material por Kafka y Material → Sesiones por gRPC.
+   - En una prueba local, el `docker-compose` de Material trae su propio Kafka en el 9092, que choca con el de Sesiones: se usa solo el de Sesiones (`compose.yaml`) y se apunta Material a `localhost:9092`.
 8. Siguiente (etapa 4), Kubernetes: Service `sesiones` con gRPC en el puerto 9090 y Actuator en 8080 para las probes; variables `DB_URL`, `DB_USER`, `DB_PASSWORD` (desde un Secret: el valor por defecto `sesiones` es solo para desarrollo), `KAFKA_BOOTSTRAP_SERVERS` y `USUARIOS_GRPC_URL=usuarios:9090` (requiere que Usuarios escuche en el 9090, ver punto 4). Antes hay que decidir dónde se publica la imagen.
