@@ -1,0 +1,99 @@
+# Base de datos propia de Sesiones. El esquema lo crea Flyway al arrancar Sesiones (incluida la
+# extensión btree_gist en V1), así que aquí no hay script de inicio.
+# La contraseña sale del Secret sesiones-secrets (ver README, "Kubernetes").
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sesiones-postgres-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sesiones-postgres
+  labels:
+    app: sesiones-postgres
+spec:
+  replicas: 1
+  # El volumen es ReadWriteOnce: el pod viejo debe terminar antes de que arranque el nuevo.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sesiones-postgres
+  template:
+    metadata:
+      labels:
+        app: sesiones-postgres
+    spec:
+      # Usuario "postgres" de la imagen Alpine (uid y gid 70).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: sesiones
+            - name: POSTGRES_USER
+              value: sesiones
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sesiones-secrets
+                  key: db-password
+            # Subcarpeta dentro del volumen: la raíz puede traer archivos que initdb no acepta.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: datos
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "sesiones", "-d", "sesiones"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "sesiones", "-d", "sesiones"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: datos
+          persistentVolumeClaim:
+            claimName: sesiones-postgres-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sesiones-postgres
+spec:
+  type: ClusterIP
+  selector:
+    app: sesiones-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432

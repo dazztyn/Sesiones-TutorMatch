@@ -1,0 +1,94 @@
+# Servicio de Sesiones. Antes de aplicar: construir la imagen (docker build -t tutormatch-sesiones .),
+# crear el Secret sesiones-secrets y aplicar kafka.yaml y postgres.yaml (ver README, "Kubernetes").
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sesiones
+  labels:
+    app: sesiones
+spec:
+  # Una sola réplica: la tarea programada de vencimiento correría en cada réplica y publicaría
+  # eventos duplicados.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sesiones
+  template:
+    metadata:
+      labels:
+        app: sesiones
+    spec:
+      # Usuario "sesiones" que crea el Dockerfile (uid 100, gid 101).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 101
+      containers:
+        - name: sesiones
+          # Imagen construida en el equipo; el Kubernetes de Docker Desktop la usa sin registro.
+          image: tutormatch-sesiones:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: 9090
+            - name: http
+              containerPort: 8080
+          env:
+            - name: DB_URL
+              value: jdbc:postgresql://sesiones-postgres:5432/sesiones
+            - name: DB_USER
+              value: sesiones
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sesiones-secrets
+                  key: db-password
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: kafka:9092
+            - name: USUARIOS_GRPC_URL
+              value: usuarios:9090
+            # La JVM usa por defecto solo el 25% de la memoria del contenedor para el heap.
+            - name: JAVA_TOOL_OPTIONS
+              value: -XX:MaxRAMPercentage=75
+          # Spring Boot activa los grupos liveness y readiness de Actuator al detectar Kubernetes.
+          # La startupProbe da hasta 2,5 minutos para arrancar antes de que cuenten las otras.
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sesiones
+spec:
+  type: ClusterIP
+  selector:
+    app: sesiones
+  ports:
+    - name: grpc
+      port: 9090
+      targetPort: 9090

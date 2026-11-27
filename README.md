@@ -185,3 +185,58 @@ docker run --rm -p 9090:9090 -p 8080:8080 -e DB_URL=jdbc:postgresql://host.docke
 `.github/workflows/ci.yml` corre en cada push y pull request: descarga el submódulo, ejecuta
 `./mvnw clean verify` (falla si el coverage queda bajo 60%), sube el informe de JaCoCo como artefacto
 y construye la imagen Docker, sin publicarla.
+
+## Kubernetes
+
+Los manifiestos están en `k8s/` y apuntan al Kubernetes que trae Docker Desktop. Usan el namespace
+por defecto y no necesitan Helm ni Kustomize.
+
+| Archivo | Qué crea |
+|---|---|
+| `k8s/kafka.yaml` | Kafka **compartido por todo el sistema**: un broker KRaft, Service `kafka:9092` |
+| `k8s/postgres.yaml` | Postgres de Sesiones con su volumen, Service `sesiones-postgres:5432` |
+| `k8s/sesiones.yaml` | Sesiones, Service `sesiones:9090` (gRPC) |
+
+Kafka anuncia `kafka:9092`: los demás servicios del cluster se conectan con esa dirección (Material
+con `KAFKA_BROKERS=kafka:9092`). Los tópicos los crea Sesiones al arrancar.
+
+### Requisitos
+
+- Docker Desktop con Kubernetes activado (Settings → Kubernetes → Enable Kubernetes).
+  `kubectl config get-contexts` tiene que mostrar `docker-desktop`.
+
+### Desplegar
+
+1. Construir la imagen. El cluster de Docker Desktop la usa directo, sin registro:
+
+   ```bash
+   docker build -t tutormatch-sesiones .
+   ```
+
+2. Crear el Secret con la contraseña de la base (no se versiona; usa tu propio valor):
+
+   ```bash
+   kubectl create secret generic sesiones-secrets --from-literal=db-password=cambiar-esta-clave
+   ```
+
+3. Aplicar Kafka y Postgres, y después Sesiones:
+
+   ```bash
+   kubectl apply -f k8s/kafka.yaml -f k8s/postgres.yaml
+   kubectl apply -f k8s/sesiones.yaml
+   ```
+
+4. Revisar:
+
+   ```bash
+   kubectl get pods
+   kubectl logs deployment/sesiones
+   ```
+
+Sesiones llama a Usuarios en `usuarios:9090`. Si Usuarios todavía no está en el cluster, Sesiones
+arranca igual, pero marcar casillas y reservar responden `UNAVAILABLE`.
+
+Después de reconstruir la imagen, se recarga con `kubectl rollout restart deployment/sesiones`.
+
+Kafka no guarda datos en disco: si su pod se reinicia, se pierden los mensajes y los tópicos. Para
+recrearlos, reinicia Sesiones con el mismo comando.

@@ -72,6 +72,7 @@ Lo que afecta a Sesiones. La versión completa, con el flujo del front, está en
 - Tablas: `sesiones` (id, tutor_id, estudiante_id, ramo_codigo, inicio, fin, horario generado, estado, creada_en) y `disponibilidad` (casillas: id, tutor_id, ramo_codigo, inicio, fin, horario generado). La V3 agregó el `EXCLUDE` de casillas, un `CHECK` de 90 minutos, `sesiones_no_a_si_mismo` y `sesiones_estudiante_sin_choque`.
 - Código: `dominio/` (entidades, repositorios, `SesionesService` con todas las reglas, `Bloques`, puerto `ValidadorTutorRamo`), `grpc/` (adaptador del servidor), `kafka/` (publicador de eventos y `TopicosKafka`, que crea los tres tópicos al arrancar), `usuarios/` (`UsuariosGrpc`, adaptador gRPC de `ValidadorTutorRamo`, y `UsuariosMock`, que se usa solo sin `USUARIOS_GRPC_URL`) y `tareas/` (vencimiento programado, intervalo en `sesiones.vencimiento.intervalo`, por defecto `PT5M`).
 - Stack: Spring Data JPA, servidor y cliente gRPC, Spring Kafka, tests con JUnit + Testcontainers (Postgres y Kafka reales).
+- Kubernetes (`k8s/`, para el cluster de Docker Desktop, namespace por defecto): `sesiones.yaml` (Service `sesiones:9090`, una réplica), `postgres.yaml` (Service `sesiones-postgres:5432`) y `kafka.yaml`. **El Kafka de todo el sistema vive en este repo:** un broker KRaft, Service `kafka:9092`, que anuncia `kafka:9092`; Material se conecta con `KAFKA_BROKERS=kafka:9092`. La contraseña de la base va en el Secret `sesiones-secrets` (clave `db-password`), creado a mano. Imagen local `tutormatch-sesiones:latest`, sin registro.
 
 ## BFF (NestJS)
 
@@ -115,7 +116,7 @@ Mientras estemos en la etapa 1, no escribas tests ni configures el pipeline salv
 
 ## Próximos pasos
 
-Estado de este repo al 2026-11-24, revisado contra el repo de contratos (commit `2fa0949`). El plan del BFF está en su propio `CLAUDE.md`.
+Estado de este repo al 2026-11-27, revisado contra el repo de contratos (commit `2fa0949`). El plan del BFF está en su propio `CLAUDE.md`.
 
 1. ✅ Contratos: el `sesiones.proto` del submódulo es el que ya implementa el servicio (al moverlo solo cambió un comentario) y los eventos de `contracts/eventos/` coinciden con lo que publica `SesionesKafkaPublisher`. El traslado no deja cambios de código pendientes.
 2. ✅ Servicio funcional: Flyway, JPA, los 8 RPC y el productor Kafka, probados a mano.
@@ -135,4 +136,6 @@ Estado de este repo al 2026-11-24, revisado contra el repo de contratos (commit 
      - `Material.Evaluar` llamó a `VerificarParticipacion` (con `tutor_id` y `ramo_codigo`) y aceptó la evaluación; repetirla dio `CONFLICT`.
      - Queda probado el ida y vuelta con los dos protocolos del curso: Sesiones → Material por Kafka y Material → Sesiones por gRPC.
    - En una prueba local, el `docker-compose` de Material trae su propio Kafka en el 9092, que choca con el de Sesiones: se usa solo el de Sesiones (`compose.yaml`) y se apunta Material a `localhost:9092`.
-8. Siguiente (etapa 4), Kubernetes: Service `sesiones` con gRPC en el puerto 9090 y Actuator en 8080 para las probes; variables `DB_URL`, `DB_USER`, `DB_PASSWORD` (desde un Secret: el valor por defecto `sesiones` es solo para desarrollo), `KAFKA_BOOTSTRAP_SERVERS` y `USUARIOS_GRPC_URL=usuarios:9090` (requiere que Usuarios escuche en el 9090, ver punto 4). Antes hay que decidir dónde se publica la imagen.
+8. ✅ Kubernetes (etapa 4, 2026-11-27, rama `feat/kubernetes`): manifiestos escritos en `k8s/` (ver "Servicio de Sesiones") y documentados en el README. Se publica sin registro: el cluster de Docker Desktop usa la imagen local. Sesiones usa `USUARIOS_GRPC_URL=usuarios:9090` (requiere que Usuarios escuche en el 9090, ver punto 4).
+   - ✅ Validado en el cluster de Docker Desktop el 2026-11-27 (contexto `docker-desktop`, modo kind, v1.36.1): los pods `kafka`, `sesiones-postgres` y `sesiones` quedaron `Running` sin reinicios; el cluster tomó la imagen local sin registro; Flyway aplicó las 3 migraciones; los tres tópicos se crearon a través de `kafka:9092`; y la API gRPC respondió por el Service `sesiones`, con `UNAVAILABLE` en lo que depende de Usuarios mientras Usuarios no esté en el cluster.
+   - Limitación conocida: Kafka no tiene volumen; si su pod se reinicia, se pierden mensajes y tópicos, y hay que reiniciar Sesiones (`kubectl rollout restart deployment/sesiones`) para recrearlos.
